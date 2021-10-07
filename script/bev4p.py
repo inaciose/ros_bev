@@ -60,7 +60,7 @@ def main():
     bridge = CvBridge()
 
     # ipm points & matrix
-    pts = np.array([[196, 217], [441, 217], [517, 422], [424, 120]], dtype=np.float32)
+    pts = np.array([[196, 217], [441, 217], [517, 423], [120, 423]], dtype=np.float32)
     ipm_pts = np.array([[212,202], [427,202], [427,417], [212,417]], dtype=np.float32)
 
     ipm_matrix = cv2.getPerspectiveTransform(pts, ipm_pts)
