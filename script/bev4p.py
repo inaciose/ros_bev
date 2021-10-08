@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 
 #
-# get the four points coordinates with perspective explorer
+# hint: to get the four points coordinates
+# use the perspective_explorer node
+#
 # v1.1.0 by inaciose
 #
 
@@ -74,7 +76,7 @@ def main():
     src_points = np.array([[196, 217], [441, 217], [517, 423], [120, 423]], dtype=np.float32)
     dst_points = np.array([[212,202], [427,202], [427,417], [212,417]], dtype=np.float32)
 
-    # create object
+    # create bird eyes view transformation object
     bevo = bev(cfg_img, cfg_d, cfg_k, src_points, dst_points)
 
     # Subscribe and pubblish topics
