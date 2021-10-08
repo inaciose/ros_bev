@@ -10,7 +10,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
 
-cv::RNG rng(12345);
+cv::RNG rng(12345); // countour
 
 #define PI 3.1415926
 
@@ -93,6 +93,7 @@ void imageSubCallback(const sensor_msgs::ImageConstPtr& msg)
 
   cv::warpPerspective(imgsrc, imgdst, transformationMat, image_size, cv::INTER_CUBIC | cv::WARP_INVERSE_MAP);
 
+  // bof: countour
   // https://stackoverflow.com/questions/64130631/how-to-use-opencv-and-python-to-find-corners-of-a-trapezoid-similar-to-finding-c
   // reduce noise and keep image sharp
   cv::Mat imgsrc_filtered;
@@ -106,14 +107,62 @@ void imageSubCallback(const sensor_msgs::ImageConstPtr& msg)
   std::vector<std::vector<cv::Point> > contours;
   std::vector<cv::Vec4i> hierarchy; 
   cv::findContours(imgsrc_edges, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
-  //sorted(contours, key=cv2.contourArea, reverse=True)
+
   cv::Mat drawing = cv::Mat::zeros( imgsrc_filtered.size(), CV_8UC3 );
+
+  /*
   for( size_t i = 0; i< contours.size(); i++ )
   {
       cv::Scalar color = cv::Scalar( rng.uniform(0, 256), rng.uniform(0,256), rng.uniform(0,256) );
       cv::drawContours( drawing, contours, (int)i, color, 2, cv::LINE_8, hierarchy, 0 );
   }
   imshow( "Contours", drawing );
+  */
+
+  // find max closed perim 
+  size_t idx_contour_selected = -1;
+  double area, maxarea = 0;
+  for( size_t i = 0; i< contours.size(); i++ )
+  {
+    area = contourArea( contours[i],false);
+    if(area >= maxarea) { 
+        maxarea = area;
+        idx_contour_selected = (int)i;
+    }
+  }
+
+  // show max area
+  if(idx_contour_selected >= 0) {
+    // set draw color
+    cv::Scalar color = cv::Scalar( rng.uniform(0, 256), rng.uniform(0,256), rng.uniform(0,256) );
+    // create image and draw on it
+    cv::Mat drawing = cv::Mat::zeros( imgsrc_filtered.size(), CV_8UC3 );
+    cv::drawContours( drawing, contours, (int)idx_contour_selected, color, 2, cv::LINE_8, hierarchy, 0 );
+    imshow( "Contours", drawing );
+  
+  
+  
+    double perim = cv::arcLength(contours[(int)idx_contour_selected], true);
+    // setting the precision
+    double epsilon = 0.02*perim;
+    // approximating the contour with a polygon
+    //std::vector<std::vector<cv::Point> > approxCorners;
+    std::vector<std::vector<cv::Point> > approxCorners( contours.size() );
+    cv::approxPolyDP(contours[(int)idx_contour_selected], approxCorners[0], epsilon, true);
+    // check how many vertices has the approximate polygon
+    //std::cout << approxCorners[0].size() << std::endl;
+    if(approxCorners[0].size()>=4) {
+      for (int j = 0; j < approxCorners[0].size() ; j++) {
+        std::cout << approxCorners[0][j].x << ", " <<  approxCorners[0][j].y << std::endl;
+      }
+      std::cout << "----" << std::endl;
+    }
+
+  
+  
+  }
+
+  // eof: countour
 
 
   cv::imshow("Source", imgsrc);
