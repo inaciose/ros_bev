@@ -13,6 +13,29 @@ import rospy
 from sensor_msgs.msg._Image import Image
 from cv_bridge.core import CvBridge
 
+"""
+def find_countours(img):
+    #filters image bilaterally and displays it
+    bilatImg = cv2.bilateralFilter(img, 5, 175, 175)
+
+    #finds edges of bilaterally filtered image and displays it
+    edgeImg = cv2.Canny(bilatImg, 75, 200)
+
+    #gets contours (outlines) for shapes and sorts from largest area to smallest area
+    contours, hierarchy = cv2.findContours(edgeImg, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    contours = sorted(contours, key=cv2.contourArea, reverse=True)
+
+    # drawing red contours on the image
+    for con in contours:
+        cv2.drawContours(img, con, -1, (0, 0, 255), 3)
+
+    # and double-checking the outcome
+    cv2.imshow("Contours check",img)
+    cv2.waitKey()
+    cv2.destroyWindow("Contours check")
+"""
+
+
 import numpy as np
 
 # Callback function to receive image
@@ -21,12 +44,10 @@ def message_RGB_ReceivedCallback(message):
     # get image from image
     img_rbg = bridge.imgmsg_to_cv2(message, "bgr8")
 
-    # debug
-    for pt in pts:
-        cv2.circle(img_rbg, tuple(pt.astype(np.int)), 4, (0,255,0), -1)
-
     # apply transform
     img_ipm = cv2.warpPerspective(img_rbg, ipm_matrix, img_rbg.shape[:2][::-1])
+
+    #find_countours(img_ipm)
 
     # debug
     cv2.imshow('img', img_rbg)
@@ -48,13 +69,13 @@ def main():
     rospy.init_node('image_crop', anonymous=False)
 
     image_raw_topic = rospy.get_param('~image_raw_topic', '/ackermann_vehicle/camera/rgb/image_raw')
-    image_crop_topic = rospy.get_param('~image_raw_topic', '/bev') 
+    image_bev_topic = rospy.get_param('~image_bev_topic', '/bev')
    
     rate_hz = rospy.get_param('~rate', 30)
 
     # Subscribe and pubblish topics
     rospy.Subscriber(image_raw_topic, Image, message_RGB_ReceivedCallback)
-    imagePub = rospy.Publisher(image_crop_topic, Image, queue_size=2)
+    imagePub = rospy.Publisher(image_bev_topic, Image, queue_size=2)
 
     # Create an object of the CvBridge class
     bridge = CvBridge()
