@@ -10,8 +10,7 @@
 #include <opencv2/highgui/highgui.hpp>
 #include <cv_bridge/cv_bridge.h>
 
-#include <list>
-#include <opencv2/saliency/saliencySpecializedClasses.hpp>
+cv::RNG rng(12345);
 
 #define PI 3.1415926
 
@@ -20,183 +19,6 @@ int frameHeight = 480;
 
 int alpha_ = 90, beta_ = 90, gamma_ = 90;
 int f_ = 500, dist_ = 500;
-
-CV_EXPORTS_W void get_regions_of_interest(cv::InputArray _src, cv::OutputArrayOfArrays mv, cv::OutputArrayOfArrays mv2 = cv::noArray());
-
-#define _DEBUG
-
-void get_regions_of_interest(cv::InputArray _src, cv::OutputArrayOfArrays _rois, cv::OutputArrayOfArrays _contours)
-{
-
-    // Check that the first argument is an image and the second a vector of images.
-    CV_Assert(_src.isMat() && !_src.depth() && (_src.channels() == 1 || _src.channels() == 3) && _rois.isMatVector() && (!_contours.needed() || (_contours.needed() && _contours.isMatVector()) ) );
-
-    static cv::Ptr<cv::saliency::StaticSaliencySpectralResidual> saliency;
-
-    if(!saliency)
-        saliency = cv::saliency::StaticSaliencySpectralResidual::create();
-
-    cv::Mat src = _src.getMat();
-    cv::Mat gray;
-
-    if(src.depth() == src.type())
-        gray = src;
-    else
-        cv::cvtColor(src,gray,cv::COLOR_BGR2GRAY);
-
-    bool is_ctr_needed = _contours.needed();
-    std::list<cv::Mat> final_ctrs;
-
-    // Step 1) Process the saliency in order to segment the dices.
-
-    cv::Mat saliency_map;
-    cv::Mat binary_map;
-
-    saliency->computeSaliency(src,saliency_map);
-    saliency->computeBinaryMap(saliency_map,binary_map);
-
-
-    saliency_map.release();
-
-    // Step 2) From the binary map get the regions of interest.
-
-    cv::Mat1i stats;
-    std::vector<cv::Mat> rois;
-
-    cv::Mat labels;
-    cv::Mat centroids;
-
-    cv::connectedComponentsWithStats(binary_map, labels, stats, centroids);
-
-
-    labels.release();
-    centroids.release();
-
-    // prepare the memory
-    rois.reserve(stats.rows-1);
-
-    // Sort the stats in order to remove the background.
-
-    stats = stats.colRange(0,stats.cols-1);
-
-    // Extract the rois.
-
-    for(int i=0;i<stats.rows;i++)
-    {
-        cv::Rect roi = *reinterpret_cast<cv::Rect*>(stats.ptr<int>(i));
-
-        if(static_cast<std::size_t>(roi.area()) == gray.total())
-            continue;
-
-        rois.push_back(gray(roi));
-#ifdef _DEBUG
-        cv::imshow("roi_"+std::to_string(i),gray(roi));
-#endif
-    }
-
-
-
-    // Step 3) Refine.
-
-    // Because the final number of shape cannot be determine in advance it is better to use a linked list than a vector.
-    // In practice except if there is a huge number of elements to work with the performance will be almost the same.
-    std::list<cv::Mat> shapes;
-
-    int cnt=0;
-    for(const cv::Mat& roi : rois)
-    {
-
-        cv::Mat tmp = roi.clone();
-
-        // Slightly sharpen the regions contours
-        cv::morphologyEx(tmp,tmp, cv::MORPH_CLOSE, cv::noArray());
-        // Reduce the influence of local unhomogeneous illumination.
-        cv::GaussianBlur(tmp,tmp,cv::Size(31,31), 5);
-
-        cv::Mat thresh;
-        // Binarize the image.
-        cv::threshold(roi,thresh,0.,255.,cv::THRESH_BINARY | cv::THRESH_OTSU);
-#ifdef _DEBUG
-        cv::imshow("thresh"+std::to_string(cnt++),thresh);
-#endif
-        // Find the contours of each sub region on interest
-        std::vector<cv::Mat> contours;
-
-        cv::findContours(thresh, contours, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
-
-        cv::Mat dc;
-
-        cv::merge(std::vector<cv::Mat>(3,thresh),dc);
-
-//        cv::drawContours(dc, contours,-1,cv::Scalar(0.,0.,255),2);
-//        cv::imshow("ctrs"+std::to_string(cnt),dc);
-
-        // Extract the sub-regions
-
-        if(is_ctr_needed)
-        {
-            for(const cv::Mat& ctrs: contours)
-            {
-
-                cv::Rect croi = cv::boundingRect(ctrs);
-
-                // If the sub region is to big or to small it is depreate
-                if(static_cast<std::size_t>(croi.area()) == roi.total() || croi.area()<50)
-                    continue;
-
-                final_ctrs.push_back(ctrs);
-
-                shapes.push_back(roi(croi));
-
-#ifdef _DEBUG
-                cv::rectangle(dc,croi,cv::Scalar(0.,0.,255.));
-
-                cv::imshow("sub_roi_"+std::to_string(cnt++),roi(croi));
-#endif
-            }
-        }
-        else
-        {
-            for(const cv::Mat& ctrs: contours)
-            {
-
-                cv::Rect croi = cv::boundingRect(ctrs);
-
-                // If the sub region is to big or to small it is depreate
-                if(static_cast<std::size_t>(croi.area()) == roi.total() || croi.area()<50)
-                    continue;
-
-                shapes.push_back(roi(croi));
-
-#ifdef _DEBUG
-                cv::rectangle(dc,croi,cv::Scalar(0.,0.,255.));
-
-                cv::imshow("sub_roi_"+std::to_string(cnt++),roi(croi));
-#endif
-
-            }
-        }
-
-    }
-#ifdef _DEBUG
-    cv::waitKey(-1);
-#endif
-
-    // Final Step: set the output
-
-    _rois.create(shapes.size(),1,CV_8U);
-    _rois.assign(std::vector<cv::Mat>(shapes.begin(),shapes.end()));
-
-    if(is_ctr_needed)
-    {
-        _contours.create(final_ctrs.size(),1,CV_32SC2);
-        _contours.assign(std::vector<cv::Mat>(final_ctrs.begin(), final_ctrs.end()));
-    }
-
-}
-
-
-
 
 void imageSubCallback(const sensor_msgs::ImageConstPtr& msg)
 {
@@ -271,10 +93,27 @@ void imageSubCallback(const sensor_msgs::ImageConstPtr& msg)
 
   cv::warpPerspective(imgsrc, imgdst, transformationMat, image_size, cv::INTER_CUBIC | cv::WARP_INVERSE_MAP);
 
-  // shape detection
-  std::vector<cv::Mat> rois;
+  // https://stackoverflow.com/questions/64130631/how-to-use-opencv-and-python-to-find-corners-of-a-trapezoid-similar-to-finding-c
+  // reduce noise and keep image sharp
+  cv::Mat imgsrc_filtered;
+  cv::bilateralFilter(imgsrc, imgsrc_filtered, 5, 175, 175);
+  
+  //finds edges on image
+  cv::Mat imgsrc_edges;
+  cv::Canny(imgsrc_filtered, imgsrc_edges, 75, 200);
 
-  get_regions_of_interest(imgsrc,rois);
+  //gets contours (outlines) for shapes and sorts from largest area to smallest area
+  std::vector<std::vector<cv::Point> > contours;
+  std::vector<cv::Vec4i> hierarchy; 
+  cv::findContours(imgsrc_edges, contours, hierarchy, cv::RETR_TREE, cv::CHAIN_APPROX_SIMPLE);
+  //sorted(contours, key=cv2.contourArea, reverse=True)
+  cv::Mat drawing = cv::Mat::zeros( imgsrc_filtered.size(), CV_8UC3 );
+  for( size_t i = 0; i< contours.size(); i++ )
+  {
+      cv::Scalar color = cv::Scalar( rng.uniform(0, 256), rng.uniform(0,256), rng.uniform(0,256) );
+      cv::drawContours( drawing, contours, (int)i, color, 2, cv::LINE_8, hierarchy, 0 );
+  }
+  imshow( "Contours", drawing );
 
 
   cv::imshow("Source", imgsrc);
