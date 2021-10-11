@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
 
+# bird's eye view calculated from a set of 4 points 
+# coordinates in source and destination imagem in order to
+# compute perspective transform matrix by opencv method 
+# using it in opencv WrapPerspective method , 
+# and image undistort
+# 
 #
 # hint: to get the four points coordinates
 # use the perspective_explorer node
 #
-# v1.1.0 by inaciose
+# v1.0.1 by inaciose
 #
 
 # Imports
